@@ -9,7 +9,6 @@ defmodule RetWeb.Plugs.AddCSP do
     :frame_src,
     :child_src,
     :worker_src,
-    :manifest_src,
     :form_action
   ]
 
@@ -97,7 +96,6 @@ defmodule RetWeb.Plugs.AddCSP do
     ret_domain = ret_host |> String.split(".") |> Enum.take(-2) |> Enum.join(".")
     ret_port = RetWeb.Endpoint.config(:url) |> Keyword.get(:port)
     is_subdomain = ret_host |> String.split(".") |> length > 2
-    link_url = config_url(:link_url)
     # legacy
     thumbnail_url = config_url(:thumbnail_url) || cors_proxy_url |> String.replace("cors-proxy", "nearspark")
 
@@ -122,10 +120,6 @@ defmodule RetWeb.Plugs.AddCSP do
     %{
       "default-src" => [
         "'none'"
-      ],
-      "manifest-src" => [
-        "'self'",
-        custom_rules[:manifest_src]
       ],
       "script-src" => [
         "'self'",
@@ -195,7 +189,6 @@ defmodule RetWeb.Plugs.AddCSP do
         assets_url,
         cors_proxy_url,
         custom_rules[:connect_src],
-        link_url,
         ret_direct_connect,
         storage_url,
         thumbnail_url

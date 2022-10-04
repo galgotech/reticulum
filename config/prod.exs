@@ -27,7 +27,6 @@ config :ret, RetWeb.Endpoint,
   static_url: [scheme: "https", host: "", port: 443],
   cors_proxy_url: [scheme: "https", host: "", port: 443],
   assets_url: [scheme: "https", host: "", port: 443],
-  link_url: [scheme: "https", host: "", port: 443],
   imgproxy_url: [scheme: "http", host: "", port: 5000],
   pubsub: [name: Ret.PubSub, adapter: Phoenix.PubSub.PG2, pool_size: 4],
   server: true,
@@ -100,8 +99,6 @@ config :phoenix, :filter_parameters, ["q", "filter", "cursor"]
 # Disable prepared queries bc of pgbouncer
 config :ret, Ret.Repo, adapter: Ecto.Adapters.Postgres, prepare: :unnamed
 
-config :peerage, via: Ret.PeerageProvider
-
 config :ret, page_auth: [username: "", password: "", realm: "Reticulum"]
 
 config :ret, Ret.Scheduler,
@@ -121,18 +118,11 @@ config :ret, Ret.Scheduler,
     # Various maintenence routines
     {{:cron, "0 10 * * *"}, {Ret.Storage, :vacuum, []}},
     {{:cron, "3 10 * * *"}, {Ret.Storage, :demote_inactive_owned_files, []}},
-    {{:cron, "4 10 * * *"}, {Ret.LoginToken, :expire_stale, []}},
     {{:cron, "6 10 * * *"}, {Ret.Hub, :vacuum_hosts, []}},
     {{:cron, "7 10 * * *"}, {Ret.CachedFile, :vacuum, []}}
   ]
 
 config :ret, RetWeb.Plugs.HeaderAuthorization, header_name: "x-ret-admin-access-key"
-
-config :ret, Ret.Mailer,
-  adapter: Bamboo.SMTPAdapter,
-  tls: :always,
-  ssl: false,
-  retries: 3
 
 config :ret, Ret.Guardian, issuer: "ret", ttl: {12, :weeks}, allowed_drift: 60 * 1000
 

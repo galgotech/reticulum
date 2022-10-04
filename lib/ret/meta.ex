@@ -19,7 +19,6 @@ defmodule Ret.Meta do
       repo: %{
         accounts: %{
           any: Ret.Account.has_accounts?(),
-          admin: Ret.Account.has_admin_accounts?()
         },
         avatar_listings: %{
           any: Ret.AvatarListing.has_any_in_filter?(nil),
@@ -41,7 +40,6 @@ defmodule Ret.Meta do
 
   def available_integrations_meta do
     %{
-      twitter: Ret.TwitterClient.available?(),
       bing_images: Ret.MediaSearch.available?(:bing_images),
       bing_videos: Ret.MediaSearch.available?(:bing_videos),
       youtube_videos: Ret.MediaSearch.available?(:youtube_videos),

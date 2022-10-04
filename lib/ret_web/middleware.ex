@@ -11,8 +11,6 @@ defmodule RetWeb.Middleware do
 
   @timing_ids [
     :my_rooms,
-    :public_rooms,
-    :favorite_rooms,
     :create_room,
     :update_room
   ]

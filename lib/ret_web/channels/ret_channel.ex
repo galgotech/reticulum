@@ -29,23 +29,6 @@ defmodule RetWeb.RetChannel do
     {:noreply, socket}
   end
 
-  def handle_in("refresh_perms_token", _params, socket) do
-    account = Guardian.Phoenix.Socket.current_resource(socket)
-
-    perms = Account.get_global_perms_for_account(account)
-
-    perms =
-      if account do
-        perms |> Map.put(:account_id, account.account_id)
-      else
-        perms
-      end
-
-    perms_token = perms |> Ret.PermsToken.token_for_perms()
-
-    {:reply, {:ok, %{perms_token: perms_token}}, socket}
-  end
-
   def handle_info({:begin_tracking, session_id, hub_id}, socket) do
     {:ok, _} = Presence.track(socket, session_id, %{hub_id: hub_id})
     {:noreply, socket}

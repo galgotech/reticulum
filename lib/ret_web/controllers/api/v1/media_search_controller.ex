@@ -48,7 +48,7 @@ defmodule RetWeb.Api.V1.MediaSearchController do
   end
 
   def index(conn, %{"source" => source, "user" => user} = params)
-      when source in ["scenes", "avatars", "favorites", "assets"] do
+      when source in ["scenes", "avatars", "assets"] do
     account = conn |> Guardian.Plug.current_resource()
 
     if account && account.account_id == String.to_integer(user) do
@@ -66,10 +66,6 @@ defmodule RetWeb.Api.V1.MediaSearchController do
     else
       conn |> send_resp(401, "You can only search #{source} by user for your own account.")
     end
-  end
-
-  def index(conn, %{"source" => source}) when source in ["favorites"] do
-    conn |> send_resp(401, "Missing account id for favorites search.")
   end
 
   def index(conn, %{"source" => source} = params)

@@ -118,10 +118,6 @@ defmodule RetWeb.Api.V1.SceneController do
 
         scene = scene |> preload()
 
-        if scene.allow_promotion do
-          Task.async(fn -> scene |> Ret.Support.send_notification_of_new_scene() end)
-        end
-
         case result do
           :ok ->
             conn |> render("create.json", scene: scene, account: account)

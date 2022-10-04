@@ -1,7 +1,7 @@
 defmodule RetWeb.Api.V1.HubController do
   use RetWeb, :controller
 
-  alias Ret.{Hub, Scene, Repo}
+  alias Ret.{Hub, Scene, Repo, Account}
 
   import Canada, only: [can?: 2]
 
@@ -19,7 +19,7 @@ defmodule RetWeb.Api.V1.HubController do
   defp exec_create(hub_changeset, conn) do
     account = Guardian.Plug.current_resource(conn)
 
-    if account |> can?(create_hub(nil)) do
+    if account |> Account.external() |> can?(create_hub(nil)) do
       {result, hub} =
         hub_changeset
         |> Hub.add_account_to_changeset(account)
@@ -39,7 +39,7 @@ defmodule RetWeb.Api.V1.HubController do
 
     case Hub
          |> Repo.get_by(hub_sid: hub_sid)
-         |> Repo.preload([:created_by_account, :hub_bindings, :hub_role_memberships]) do
+         |> Repo.preload([:created_by_account, :hub_role_memberships]) do
       %Hub{} = hub ->
         if account |> can?(update_hub(hub)) do
           update_with_hub(conn, account, hub, hub_params)

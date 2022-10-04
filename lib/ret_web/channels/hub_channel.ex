@@ -8,10 +8,8 @@ defmodule RetWeb.HubChannel do
   alias Ret.{
     AppConfig,
     Hub,
-    HubInvite,
     Account,
-    AccountFavorite,
-    Identity,
+    AccountExternal,
     Repo,
     RoomObject,
     OwnedFile,
@@ -28,8 +26,6 @@ defmodule RetWeb.HubChannel do
   intercept([
     "hub_refresh",
     "mute",
-    "add_owner",
-    "remove_owner",
     "message",
     "block",
     "unblock",
@@ -55,7 +51,7 @@ defmodule RetWeb.HubChannel do
     |> perform_join(
       hub,
       context,
-      params |> Map.take(["push_subscription_endpoint", "auth_token", "perms_token", "bot_access_key", "hub_invite_id"])
+      params |> Map.take(["push_subscription_endpoint", "auth_token"])
     )
   end
 
@@ -71,21 +67,10 @@ defmodule RetWeb.HubChannel do
         _ -> nil
       end
 
-    hub_requires_oauth = hub.hub_bindings |> Enum.empty?() |> Kernel.not()
+    account_can_update = account |> Account.external() |> can?(update_hub(hub))
 
-    bot_access_key = Application.get_env(:ret, :bot_access_key)
-    has_valid_bot_access_key = !!(bot_access_key && params["bot_access_key"] == bot_access_key)
-
-    account_has_provider_for_hub = account |> Ret.Account.matching_oauth_providers(hub) |> Enum.empty?() |> Kernel.not()
-
-    account_can_join = account |> can?(join_hub(hub))
-    account_can_update = account |> can?(update_hub(hub))
-
-    perms_token = params["perms_token"]
-
-    has_perms_token = perms_token != nil
-
-    decoded_perms = perms_token |> Ret.PermsToken.decode_and_verify()
+    decoded_perms = account |> Account.external() |> AccountExternal.perms()
+    has_perms_token = decoded_perms != nil
 
     perms_token_can_join =
       case decoded_perms do
@@ -93,30 +78,12 @@ defmodule RetWeb.HubChannel do
         _ -> false
       end
 
-    {oauth_account_id, oauth_source} =
-      case decoded_perms do
-        {:ok, %{"oauth_account_id" => oauth_account_id, "oauth_source" => oauth_source}} ->
-          {oauth_account_id, oauth_source |> String.to_atom()}
-
-        _ ->
-          {nil, nil}
-      end
-
-    has_active_invite = Ret.HubInvite.active?(hub, params["hub_invite_id"])
-
     params =
       params
       |> Map.merge(%{
-        has_active_invite: has_active_invite,
-        hub_requires_oauth: hub_requires_oauth,
-        has_valid_bot_access_key: has_valid_bot_access_key,
-        account_has_provider_for_hub: account_has_provider_for_hub,
-        account_can_join: account_can_join,
         account_can_update: account_can_update,
         has_perms_token: has_perms_token,
-        oauth_account_id: oauth_account_id,
-        oauth_source: oauth_source,
-        perms_token_can_join: perms_token_can_join
+        perms_token_can_join: perms_token_can_join,
       })
 
     hub |> join_with_hub(account, socket, context, params)
@@ -220,13 +187,6 @@ defmodule RetWeb.HubChannel do
     {:noreply, socket}
   end
 
-  def handle_in("events:request_support", _payload, socket) do
-    hub = socket |> hub_for_socket
-    Task.start_link(fn -> hub |> Ret.Support.request_support_for_hub() end)
-
-    {:noreply, socket}
-  end
-
   def handle_in("events:profile_updated", %{"profile" => profile}, socket) do
     socket = socket |> assign(:profile, profile) |> broadcast_presence_update
     {:noreply, socket}
@@ -275,18 +235,6 @@ defmodule RetWeb.HubChannel do
     {:noreply, socket}
   end
 
-  def handle_in("favorite", _params, socket) do
-    account = Guardian.Phoenix.Socket.current_resource(socket)
-    socket |> hub_for_socket |> AccountFavorite.ensure_favorited(account)
-    {:noreply, socket}
-  end
-
-  def handle_in("unfavorite", _params, socket) do
-    account = Guardian.Phoenix.Socket.current_resource(socket)
-    socket |> hub_for_socket |> AccountFavorite.ensure_not_favorited(account)
-    {:noreply, socket}
-  end
-
   def handle_in("unsubscribe", %{"subscription" => subscription}, socket) do
     socket
     |> hub_for_socket
@@ -297,42 +245,12 @@ defmodule RetWeb.HubChannel do
     {:reply, {:ok, %{has_remaining_subscriptions: has_remaining_subscriptions}}, socket}
   end
 
-  def handle_in("sign_in", %{"token" => token} = payload, socket) do
-    creator_assignment_token = payload["creator_assignment_token"]
-
-    case Ret.Guardian.resource_from_token(token) do
-      {:ok, %Account{} = account, _claims} ->
-        socket = Guardian.Phoenix.Socket.put_current_resource(socket, account)
-
-        hub = socket |> hub_for_socket |> Repo.preload(Hub.hub_preloads())
-
-        hub =
-          if creator_assignment_token do
-            hub
-            |> Hub.changeset_for_creator_assignment(account, creator_assignment_token)
-            |> Repo.update!()
-          else
-            hub
-          end
-
-        perms_token = get_perms_token(hub, account)
-        broadcast_presence_update(socket)
-
-        {:reply, {:ok, %{perms_token: perms_token}}, socket}
-
-      {:error, reason} ->
-        {:reply, {:error, %{message: "Sign in failed", reason: reason}}, socket}
-    end
-  end
-
   def handle_in("sign_out", _payload, socket) do
     socket = Guardian.Phoenix.Socket.put_current_resource(socket, nil)
     broadcast_presence_update(socket)
 
-    # Disconnect if signing out and account is required
-    if AppConfig.get_cached_config_value("features|require_account_for_join") do
-      Process.send_after(self(), :close_channel, 5000)
-    end
+    # Disconnect
+    Process.send_after(self(), :close_channel, 5000)
 
     {:reply, {:ok, %{}}, socket}
   end
@@ -442,32 +360,6 @@ defmodule RetWeb.HubChannel do
     {:noreply, socket}
   end
 
-  def handle_in("fetch_invite", _payload, socket) do
-    hub = hub_for_socket(socket)
-    account = Guardian.Phoenix.Socket.current_resource(socket)
-
-    if account |> can?(update_hub(hub)) do
-      hub_invite = hub |> HubInvite.find_or_create_invite_for_hub()
-      {:reply, {:ok, %{hub_invite_id: hub_invite && hub_invite.hub_invite_sid}}, socket}
-    else
-      {:reply, {:ok, %{}}, socket}
-    end
-  end
-
-  def handle_in("revoke_invite", payload, socket) do
-    hub = hub_for_socket(socket)
-    account = Guardian.Phoenix.Socket.current_resource(socket)
-
-    if account |> can?(update_hub(hub)) and HubInvite.active?(hub, payload["hub_invite_id"]) do
-      HubInvite.revoke_invite(hub, payload["hub_invite_id"])
-      # Hubs can only have one invite for now, so we create a new one when the old one was revoked.
-      hub_invite = hub |> HubInvite.find_or_create_invite_for_hub()
-      {:reply, {:ok, %{hub_invite_id: hub_invite.hub_invite_sid}}, socket}
-    else
-      {:reply, {:ok, %{}}, socket}
-    end
-  end
-
   def handle_in("close_hub", _payload, socket) do
     socket |> handle_entry_mode_change(:deny)
   end
@@ -493,29 +385,6 @@ defmodule RetWeb.HubChannel do
     end
 
     {:noreply, socket}
-  end
-
-  def handle_in(
-        "refresh_perms_token",
-        _args,
-        %{assigns: %{oauth_account_id: oauth_account_id, oauth_source: oauth_source}} = socket
-      )
-      when oauth_account_id != nil do
-    perms_token =
-      socket
-      |> hub_for_socket
-      |> get_perms_token(%Ret.OAuthProvider{
-        provider_account_id: oauth_account_id,
-        source: oauth_source
-      })
-
-    {:reply, {:ok, %{perms_token: perms_token}}, socket}
-  end
-
-  def handle_in("refresh_perms_token", _args, socket) do
-    account = Guardian.Phoenix.Socket.current_resource(socket)
-    perms_token = socket |> hub_for_socket |> get_perms_token(account)
-    {:reply, {:ok, %{perms_token: perms_token}}, socket}
   end
 
   def handle_in("block" = event, %{"session_id" => session_id} = payload, socket) do
@@ -553,32 +422,6 @@ defmodule RetWeb.HubChannel do
   # (and therefore, only respect block_naf) when a hub is embedded (or if there are blocks on the socket.)
   def handle_in("block_naf", _payload, socket), do: {:noreply, socket |> assign(:block_naf, true)}
   def handle_in("unblock_naf", _payload, socket), do: {:noreply, socket |> assign(:block_naf, false)}
-
-  def handle_in(event, %{"session_id" => _session_id} = payload, socket) when event in ["add_owner", "remove_owner"] do
-    account = Guardian.Phoenix.Socket.current_resource(socket)
-    hub = socket |> hub_for_socket
-
-    if account |> can?(update_roles(hub)) do
-      broadcast_from!(socket, event, payload)
-    end
-
-    {:noreply, socket}
-  end
-
-  def handle_in("oauth", %{"type" => "twitter"}, socket) do
-    hub = socket |> hub_for_socket
-
-    case Guardian.Phoenix.Socket.current_resource(socket) do
-      %Account{} = account ->
-        case Ret.TwitterClient.get_oauth_url(hub.hub_sid, account.account_id) do
-          {:error, reason} -> {:reply, {:error, %{reason: reason}}, socket}
-          url -> {:reply, {:ok, %{oauth_url: url}}, socket}
-        end
-
-      _ ->
-        {:reply, :error, socket}
-    end
-  end
 
   def handle_in(_message, _payload, socket) do
     {:noreply, socket}
@@ -642,27 +485,6 @@ defmodule RetWeb.HubChannel do
       else
         socket
       end
-
-    {:noreply, socket}
-  end
-
-  def handle_out(event, %{"session_id" => session_id}, socket) when event in ["add_owner", "remove_owner"] do
-    account = Guardian.Phoenix.Socket.current_resource(socket)
-
-    if account && socket.assigns.session_id == session_id do
-      # Outgoing message has already had a permission check on the sender side, so perform the action
-      action =
-        if event == "add_owner" do
-          &Hub.add_owner!/2
-        else
-          &Hub.remove_owner!/2
-        end
-
-      socket |> hub_for_socket |> action.(account)
-
-      broadcast_presence_update(socket)
-      push(socket, "permissions_updated", %{})
-    end
 
     {:noreply, socket}
   end
@@ -821,181 +643,14 @@ defmodule RetWeb.HubChannel do
     account = Guardian.Phoenix.Socket.current_resource(socket)
 
     socket.assigns
-    |> maybe_override_identifiers(account)
     |> Map.put(:roles, hub |> Hub.roles_for_account(account))
-    |> Map.put(:permissions, hub |> Hub.perms_for_account(account))
+    |> Map.put(:permissions, hub |> Hub.perms_for_account(account |> Account.external()))
     |> Map.take([:presence, :profile, :context, :roles, :permissions, :streaming, :recording, :hand_raised, :typing])
-  end
-
-  # Hubs Bot can set their own display name.
-  defp maybe_override_identifiers(
-         %{
-           hub_requires_oauth: true,
-           has_valid_bot_access_key: true
-         } = assigns,
-         _account
-       ),
-       do: assigns
-
-  # Do a direct display name lookup for OAuth users without a verified email (and thus, no Hubs account).
-  defp maybe_override_identifiers(
-         %{
-           hub_requires_oauth: true,
-           hub_sid: hub_sid,
-           oauth_source: oauth_source,
-           oauth_account_id: oauth_account_id
-         } = assigns,
-         _account
-       )
-       when not is_nil(oauth_source) and not is_nil(oauth_account_id) do
-    hub = Hub |> Repo.get_by(hub_sid: hub_sid) |> Repo.preload(:hub_bindings)
-
-    # Assume hubs only have a single hub binding for now.
-    hub_binding = hub.hub_bindings |> Enum.at(0)
-
-    oauth_provider = %Ret.OAuthProvider{
-      source: oauth_source,
-      provider_account_id: oauth_account_id
-    }
-
-    assigns |> override_display_name_via_binding(oauth_provider, hub_binding)
-  end
-
-  # If there isn't an oauth account id on the socket, we expect the user to have an account
-  defp maybe_override_identifiers(
-         %{
-           hub_requires_oauth: true,
-           hub_sid: hub_sid,
-           oauth_account_id: oauth_account_id
-         } = assigns,
-         account
-       )
-       when is_nil(oauth_account_id) do
-    hub = Hub |> Repo.get_by(hub_sid: hub_sid) |> Repo.preload(:hub_bindings)
-
-    # Assume hubs only have a single hub binding for now.
-    hub_binding = hub.hub_bindings |> Enum.at(0)
-
-    # There's no way tell which oauth_provider a user would like to identify with. We're just going to pick
-    # the first one for now.
-    oauth_provider =
-      account.oauth_providers |> Enum.filter(fn provider -> hub_binding.type == provider.source end) |> Enum.at(0)
-
-    assigns |> override_display_name_via_binding(oauth_provider, hub_binding)
-  end
-
-  # For unbound hubs, set the identity name for the account.
-  defp maybe_override_identifiers(
-         %{
-           hub_requires_oauth: false
-         } = assigns,
-         %Account{identity: %Identity{name: name}}
-       ),
-       do: put_in(assigns.profile["identityName"], name)
-
-  defp maybe_override_identifiers(
-         %{
-           hub_requires_oauth: false
-         } = assigns,
-         _account
-       ),
-       do: assigns
-
-  defp override_display_name_via_binding(assigns, oauth_provider, hub_binding) do
-    display_name = oauth_provider |> Ret.HubBinding.fetch_display_name(hub_binding)
-    community_identifier = oauth_provider |> Ret.HubBinding.fetch_community_identifier()
-
-    overriden =
-      assigns.profile
-      |> Map.merge(%{
-        "displayName" => display_name,
-        "identityName" => community_identifier,
-        # Deprecated
-        "communityIdentifier" => community_identifier
-      })
-
-    assigns |> Map.put(:profile, overriden)
   end
 
   defp join_with_hub(%Hub{entry_mode: :deny}, _account, _socket, _context, _params) do
     {:error, %{message: "Hub no longer accessible", reason: "closed"}}
   end
-
-  defp join_with_hub(
-         %Hub{},
-         %Account{},
-         _socket,
-         _context,
-         %{
-           hub_requires_oauth: false,
-           account_can_join: false
-         }
-       ),
-       do: deny_join()
-
-  defp join_with_hub(
-         %Hub{entry_mode: :invite},
-         _account,
-         _socket,
-         _context,
-         %{
-           has_active_invite: false,
-           account_can_update: false
-         }
-       ),
-       do: deny_join()
-
-  defp join_with_hub(
-         %Hub{},
-         %Account{},
-         _socket,
-         _context,
-         %{
-           hub_requires_oauth: true,
-           account_has_provider_for_hub: true,
-           account_can_join: false
-         }
-       ),
-       do: deny_join()
-
-  defp join_with_hub(
-         %Hub{},
-         nil = _account,
-         _socket,
-         _context,
-         %{
-           hub_requires_oauth: true,
-           has_valid_bot_access_key: false,
-           has_perms_token: true,
-           perms_token_can_join: false
-         }
-       ),
-       do: deny_join()
-
-  defp join_with_hub(
-         %Hub{} = hub,
-         %Account{},
-         _socket,
-         _context,
-         %{
-           hub_requires_oauth: true,
-           account_has_provider_for_hub: false
-         }
-       ),
-       do: require_oauth(hub)
-
-  defp join_with_hub(
-         %Hub{} = hub,
-         nil = _account,
-         _socket,
-         _context,
-         %{
-           hub_requires_oauth: true,
-           has_valid_bot_access_key: false,
-           has_perms_token: false
-         }
-       ),
-       do: require_oauth(hub)
 
   # Join denied based upon account requirement
   defp join_with_hub(
@@ -1004,17 +659,13 @@ defmodule RetWeb.HubChannel do
          _socket,
          _context,
          %{
-           hub_requires_oauth: false,
-           has_valid_bot_access_key: false,
-           has_perms_token: false,
-           account_can_join: false
+           has_perms_token: false
          }
        ),
        do: deny_join()
 
   defp join_with_hub(%Hub{} = hub, account, socket, context, params) do
     hub = hub |> Hub.ensure_host()
-
     hub =
       if context["embed"] && !hub.embedded do
         hub
@@ -1034,28 +685,19 @@ defmodule RetWeb.HubChannel do
       push_subscription_endpoint &&
         hub.web_push_subscriptions |> Enum.any?(&(&1.endpoint == push_subscription_endpoint))
 
-    is_favorited = AccountFavorite.timestamp_join_if_favorited(hub, account)
-
     socket = Guardian.Phoenix.Socket.put_current_resource(socket, account)
 
     with socket <-
            socket
            |> assign(:hub_sid, hub.hub_sid)
-           |> assign(:hub_requires_oauth, params[:hub_requires_oauth])
-           |> assign(:presence, :lobby)
-           |> assign(:oauth_account_id, params[:oauth_account_id])
-           |> assign(:oauth_source, params[:oauth_source])
-           |> assign(:has_valid_bot_access_key, params[:has_valid_bot_access_key]),
-         response <- HubView.render("show.json", %{hub: hub, embeddable: account |> can?(embed_hub(hub))}) do
-      perms_token = params["perms_token"] || get_perms_token(hub, account)
+           |> assign(:presence, :lobby),
+         response <- HubView.render("show.json", %{hub: hub, embeddable: account |> Account.external() |> can?(embed_hub(hub))}) do
 
       response =
         response
         |> Map.put(:session_id, socket.assigns.session_id)
         |> Map.put(:session_token, socket.assigns.session_id |> Ret.SessionToken.token_for_session())
-        |> Map.put(:subscriptions, %{web_push: is_push_subscribed, favorites: is_favorited})
-        |> Map.put(:perms_token, perms_token)
-        |> Map.put(:hub_requires_oauth, params[:hub_requires_oauth])
+        |> Map.put(:subscriptions, %{web_push: is_push_subscribed})
 
       existing_stat_count =
         socket
@@ -1085,43 +727,8 @@ defmodule RetWeb.HubChannel do
     end
   end
 
-  defp require_oauth(hub) do
-    oauth_info = hub.hub_bindings |> get_oauth_info(hub.hub_sid)
-    {:error, %{message: "OAuth required", reason: "oauth_required", oauth_info: oauth_info}}
-  end
-
   defp deny_join do
     {:error, %{message: "Join denied", reason: "join_denied"}}
-  end
-
-  defp get_oauth_info(hub_bindings, hub_sid) do
-    hub_bindings
-    |> Enum.map(
-      &case &1 do
-        %{type: :discord} -> %{type: :discord, url: Ret.DiscordClient.get_oauth_url(hub_sid)}
-        %{type: :slack} -> %{type: :slack, url: Ret.SlackClient.get_oauth_url(hub_sid)}
-      end
-    )
-  end
-
-  defp get_perms_token(hub, %Ret.OAuthProvider{provider_account_id: provider_account_id, source: source} = account) do
-    hub
-    |> Hub.perms_for_account(account)
-    |> Map.put(:oauth_account_id, provider_account_id)
-    |> Map.put(:oauth_source, source)
-    |> Map.put(:hub_id, hub.hub_sid)
-    |> Ret.PermsToken.token_for_perms()
-  end
-
-  defp get_perms_token(hub, account) do
-    account_id = if account, do: account.account_id, else: nil
-
-    hub
-    |> Hub.perms_for_account(account)
-    |> Account.add_global_perms_for_account(account)
-    |> Map.put(:account_id, account_id |> to_string)
-    |> Map.put(:hub_id, hub.hub_sid)
-    |> Ret.PermsToken.token_for_perms()
   end
 
   defp handle_entered_event(socket, payload) do
@@ -1167,7 +774,7 @@ defmodule RetWeb.HubChannel do
   end
 
   defp hub_for_socket(socket) do
-    Repo.get_by(Hub, hub_sid: socket.assigns.hub_sid) |> Repo.preload([:hub_bindings, :hub_role_memberships])
+    Repo.get_by(Hub, hub_sid: socket.assigns.hub_sid) |> Repo.preload([:hub_role_memberships])
   end
 
   defp payload_with_from(payload, socket) do

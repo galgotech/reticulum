@@ -21,7 +21,7 @@ defmodule Ret.MediaSearch do
   import Ret.HttpUtils
   import Ecto.Query
 
-  alias Ret.{Repo, OwnedFile, Scene, SceneListing, Asset, Avatar, AvatarListing, AccountFavorite, Hub, Project}
+  alias Ret.{Repo, OwnedFile, Scene, SceneListing, Asset, Avatar, AvatarListing, Hub, Project}
 
   @page_size 24
   # HACK for now to reduce page size for scene listings -- real fix will be to expose page_size to API
@@ -29,7 +29,7 @@ defmodule Ret.MediaSearch do
   @max_face_count 60000
   @max_collection_face_count 200_000
   # see sketchfab bug about max_filesizes params broken
-  # @max_file_size_bytes 20 * 1024 * 1024 
+  # @max_file_size_bytes 20 * 1024 * 1024
   # @max_collection_file_size_bytes 100 * 1024 * 1024
 
   def search(%Ret.MediaSearchQuery{source: "scene_listings", cursor: cursor, filter: "featured", q: query}) do
@@ -64,10 +64,6 @@ defmodule Ret.MediaSearch do
 
   def search(%Ret.MediaSearchQuery{source: "assets", type: type, cursor: cursor, user: account_id, q: query}) do
     assets_search(cursor, type, account_id, query)
-  end
-
-  def search(%Ret.MediaSearchQuery{source: "favorites", type: type, cursor: cursor, user: account_id, q: q}) do
-    favorites_search(cursor, type, account_id, q)
   end
 
   def search(%Ret.MediaSearchQuery{source: "rooms", filter: "public", cursor: cursor, q: q}) do
@@ -156,7 +152,7 @@ defmodule Ret.MediaSearch do
           downloadable: true,
           count: @page_size,
           max_face_count: @max_face_count,
-          # max_filesizes: "gltf:#{@max_file_size_bytes}", 
+          # max_filesizes: "gltf:#{@max_file_size_bytes}",
           processing_status: :succeeded,
           cursor: cursor,
           categories: filter,
@@ -451,27 +447,6 @@ defmodule Ret.MediaSearch do
     {:commit, results}
   end
 
-  defp filter_by_hub_entry_mode(query, entry_mode) do
-    query
-    |> join(:inner, [favorite], hub in assoc(favorite, :hub))
-    |> where([favorite, hub], hub.entry_mode == ^entry_mode)
-  end
-
-  defp favorites_search(cursor, _type, account_id, _query, order \\ [desc: :last_activated_at]) do
-    page_number = (cursor || "1") |> Integer.parse() |> elem(0)
-
-    results =
-      AccountFavorite
-      |> where([a], a.account_id == ^account_id)
-      |> preload(hub: [scene: [:screenshot_owned_file], scene_listing: [:scene, :screenshot_owned_file]])
-      |> order_by(^order)
-      |> filter_by_hub_entry_mode("allow")
-      |> Repo.paginate(%{page: page_number, page_size: @page_size})
-      |> result_for_page(page_number, :favorites, &favorite_to_entry/1)
-
-    {:commit, results}
-  end
-
   defp add_type_to_asset_search_query(query, nil), do: query
   defp add_type_to_asset_search_query(query, type), do: query |> where([a], a.type == ^type)
   defp add_query_to_asset_search_query(query, nil), do: query
@@ -627,10 +602,6 @@ defmodule Ret.MediaSearch do
         page.entries
         |> Enum.map(entry_fn)
     }
-  end
-
-  defp favorite_to_entry(%AccountFavorite{hub: hub} = favorite) when hub != nil do
-    Map.merge(hub_to_entry(hub), %{last_activated_at: favorite.last_activated_at, favorited: true})
   end
 
   defp hub_to_entry(%Hub{} = hub) when hub != nil do

@@ -141,7 +141,6 @@ defmodule RetWeb.Api.V1.ProjectController do
                ),
              {:ok, updated_project} <- project |> Project.add_scene_to_project(scene_changes),
              scene <- updated_project.scene do
-          if scene.allow_promotion, do: Task.async(fn -> scene |> Ret.Support.send_notification_of_new_scene() end)
           conn |> render("show.json", project: updated_project |> preload())
         else
           {:error, :not_found} ->

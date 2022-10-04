@@ -114,32 +114,6 @@ defmodule Ret.Application do
         id: :media_search_cache_long
       ),
 
-      # Discord API cache
-      worker(
-        Cachex,
-        [
-          :discord_api,
-          [
-            expiration: expiration(default: :timer.minutes(1)),
-            fallback: fallback(default: &Ret.DiscordClient.api_request/1)
-          ]
-        ],
-        id: :discord_api_cache
-      ),
-
-      # Slack API cache
-      worker(
-        Cachex,
-        [
-          :slack_api,
-          [
-            expiration: expiration(default: :timer.minutes(1)),
-            fallback: fallback(default: &Ret.SlackClient.api_request/1)
-          ]
-        ],
-        id: :slack_api_cache
-      ),
-
       # App Config cache
       worker(
         Cachex,
@@ -186,18 +160,6 @@ defmodule Ret.Application do
         id: :asset_cache
       ),
 
-      # Page origin chunk cache
-      worker(
-        Cachex,
-        [
-          :page_chunks,
-          [
-            warmers: [warmer(module: Ret.PageOriginWarmer)]
-          ]
-        ],
-        id: :page_chunk_cache
-      ),
-
       # Janus load status cache
       worker(
         Cachex,
@@ -235,18 +197,6 @@ defmodule Ret.Application do
         id: :coturn_secret
       ),
 
-      # What's new cache
-      worker(
-        Cachex,
-        [
-          :whats_new,
-          [
-            expiration: expiration(default: :timer.minutes(1)),
-            fallback: fallback(default: &RetWeb.Api.V1.WhatsNewController.fetch_pull_requests/1)
-          ]
-        ],
-        id: :whats_new_cache
-      ),
       supervisor(TheEnd.Of.Phoenix, [[timeout: 10_000, endpoint: RetWeb.Endpoint]])
     ]
 

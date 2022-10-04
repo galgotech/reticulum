@@ -9,7 +9,6 @@ defmodule RetWeb.Plugs.RedirectToMainDomain do
     secondary_host = RetWeb.Endpoint.config(:secondary_url)[:host]
     cors_proxy_host = RetWeb.Endpoint.config(:cors_proxy_url)[:host]
     assets_host = RetWeb.Endpoint.config(:assets_url)[:host]
-    link_host = RetWeb.Endpoint.config(:link_url)[:host]
 
     # 'host' is a misnomer
     storage_url = Application.get_env(:ret, Ret.Storage)[:host]
@@ -22,7 +21,7 @@ defmodule RetWeb.Plugs.RedirectToMainDomain do
       end
 
     if !matches_host(conn, main_host) && !matches_host(conn, secondary_host) && !matches_host(conn, cors_proxy_host) &&
-         !matches_host(conn, assets_host) && !matches_host(conn, link_host) &&
+         !matches_host(conn, assets_host) &&
          (!storage_host || !matches_host(conn, storage_host)) do
       conn
       |> put_status(:moved_permanently)

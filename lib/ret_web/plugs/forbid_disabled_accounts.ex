@@ -4,10 +4,10 @@ defmodule RetWeb.Plugs.ForbidDisabledAccounts do
   def init([]), do: []
 
   def call(conn, []) do
-    account = Guardian.Plug.current_resource(conn)
+    account = Guardian.Plug.current_resource(conn) |> Ret.Account.external()
 
     case account do
-      %Ret.Account{state: :disabled} -> conn |> send_resp(401, "") |> halt()
+      %Ret.AccountExternal{state: :disabled} -> conn |> send_resp(401, "") |> halt()
       _ -> conn
     end
   end

@@ -4,16 +4,6 @@ defmodule Ret.ApiTokenTest do
   alias Ret.{Crypto, Repo}
   alias Ret.Api.{TokenUtils, Credentials}
 
-  test "Generating an api token puts it in the database" do
-    {:ok, token, _claims} = TokenUtils.gen_app_token()
-    expected_hash = Crypto.hash(token)
-
-    %Credentials{token_hash: token_hash} =
-      Repo.one(Credentials.query() |> Credentials.where_token_hash_is(expected_hash))
-
-    assert expected_hash == token_hash
-  end
-
   test "Api tokens can be revoked" do
     {:ok, token, _claims} = TokenUtils.gen_app_token()
     expected_hash = Crypto.hash(token)

@@ -2,10 +2,10 @@ defmodule Ret.Guardian do
   @moduledoc """
   This is our primary, long-lived, authenticion token. We used to sign clients in and associate them with a Ret.Account.
   """
-  use Guardian, otp_app: :ret
+  use Guardian, otp_app: :ret, secret_fetcher: Ret.PermsTokenSecretFetcher, allowed_algos: ["RS512"]
   import Ecto.Query
 
-  alias Ret.{Account, Repo}
+  alias Ret.{Account, AccountExternal, Repo}
 
   def subject_for_token(%Account{} = account, _claims) do
     {:ok, account.account_id |> to_string}
@@ -15,13 +15,12 @@ defmodule Ret.Guardian do
     {:error, "Not found"}
   end
 
-  def resource_from_claims(%{"sub" => account_id, "iat" => issued_at}) do
-    issued_at_utc_datetime = DateTime.from_unix!(issued_at, :second) |> DateTime.to_iso8601()
+  def resource_from_claims(%{"sub" => external_id, "iat" => issued_at, "email" => email, "role" => role}) do
+    external_id |> Account.account_for_login_external_id()
 
     Account
-    |> where([a], a.account_id == ^account_id and a.min_token_issued_at <= ^issued_at_utc_datetime)
+    |> where([a], a.external_id == ^external_id)
     |> Repo.one()
-    |> Repo.preload([:oauth_providers, :identity])
     |> result_for_account
   end
 

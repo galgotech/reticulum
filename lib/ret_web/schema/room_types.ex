@@ -74,7 +74,7 @@ defmodule RetWeb.Schema.RoomTypes do
       resolve(&Resolvers.RoomResolver.entry_code/3)
     end
 
-    @desc "Determines if entry is allowed, denied, or by-invite-only. (Values are \"allow\", \"deny\", or \"invite\".)"
+    @desc "Determines if entry is allowed, denied. (Values are \"allow\", \"deny\".)"
     field(:entry_mode, :string)
     @desc "The host server associated with this room via the load balancer"
     field(:host, :string)
@@ -163,28 +163,6 @@ defmodule RetWeb.Schema.RoomTypes do
       @desc "The number of entries per page"
       arg(:page_size, :integer)
       resolve(&Resolvers.RoomResolver.my_rooms/3)
-    end
-
-    @desc """
-    Returns a list of public rooms.
-    """
-    field :public_rooms, :room_list do
-      @desc "The desired page of data to return"
-      arg(:page, :integer)
-      @desc "The number of entries per page"
-      arg(:page_size, :integer)
-      resolve(&Resolvers.RoomResolver.public_rooms/3)
-    end
-
-    @desc """
-    Returns a list of rooms favorited by the given user, identified by the authorization token.
-    """
-    field :favorite_rooms, :room_list do
-      @desc "The desired page of data to return"
-      arg(:page, :integer)
-      @desc "The number of entries per page"
-      arg(:page_size, :integer)
-      resolve(&Resolvers.RoomResolver.favorite_rooms/3)
     end
   end
 

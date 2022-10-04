@@ -3,39 +3,7 @@ defmodule Ret.Repo.Migrations.AdminSchemaInit do
   @disable_ddl_transaction true
 
   def up do
-    auth_password = Application.get_env(:ret, __MODULE__)[:postgrest_password]
-
     execute("create schema if not exists ret0_admin;")
-
-    execute("""
-    DO
-    $do$
-    BEGIN
-       IF NOT EXISTS (
-          SELECT                       -- SELECT list can stay empty for this
-          FROM   pg_catalog.pg_roles
-          WHERE  rolname = 'postgrest_authenticator') THEN
-
-          CREATE ROLE postgrest_authenticator LOGIN PASSWORD '#{auth_password}';
-       END IF;
-    END
-    $do$;
-    """)
-
-    execute("""
-    DO
-    $do$
-    BEGIN
-       IF NOT EXISTS (
-          SELECT                       -- SELECT list can stay empty for this
-          FROM   pg_catalog.pg_roles
-          WHERE  rolname = 'postgrest_anonymous') THEN
-
-          CREATE ROLE postgrest_anonymous;
-       END IF;
-    END
-    $do$;
-    """)
 
     execute("""
     DO
@@ -50,18 +18,6 @@ defmodule Ret.Repo.Migrations.AdminSchemaInit do
        END IF;
     END
     $do$;
-    """)
-
-    execute("grant postgrest_anonymous to postgrest_authenticator;")
-    execute("grant ret_admin to postgrest_authenticator;")
-
-    execute("""
-    do 
-    $$ 
-    begin
-      execute format('grant connect on database %I to postgrest_authenticator', current_database());
-    end;
-    $$;
     """)
 
     execute("grant usage on schema ret0_admin to ret_admin;")
@@ -133,7 +89,7 @@ defmodule Ret.Repo.Migrations.AdminSchemaInit do
 
     execute("""
     create or replace view ret0_admin.pending_scenes as (
-    		select scenes.id, scene_sid, scenes.slug, scenes.name, scenes.description, scenes.screenshot_owned_file_id, scenes.model_owned_file_id, scenes.scene_owned_file_id, 
+    		select scenes.id, scene_sid, scenes.slug, scenes.name, scenes.description, scenes.screenshot_owned_file_id, scenes.model_owned_file_id, scenes.scene_owned_file_id,
     		scenes.attributions, scene_listings.id as scene_listing_id, scenes.updated_at, scenes.allow_remixing as _allow_remixing, scenes.allow_promotion as _allow_promotion
     		from ret0_admin.scenes
     		left outer join ret0_admin.scene_listings on scene_listings.scene_id = scenes.id
@@ -147,7 +103,7 @@ defmodule Ret.Repo.Migrations.AdminSchemaInit do
     create or replace view ret0_admin.featured_scene_listings as (
     select id, scene_listing_sid, slug, name, description, screenshot_owned_file_id, model_owned_file_id, scene_owned_file_id, attributions, scene_listings.order, tags
     from ret0_admin.scene_listings
-    where 
+    where
     state = 'active' and
     tags->'tags' ? 'featured' and
     exists (select id from ret0_admin.scenes s where s.id = scene_listings.scene_id and s.state = 'active' and s.allow_promotion)
@@ -194,18 +150,5 @@ defmodule Ret.Repo.Migrations.AdminSchemaInit do
     execute("revoke usage on ret0.table_id_seq from ret_admin;")
     execute("revoke usage on schema ret0 from ret_admin;")
     execute("drop role ret_admin;")
-    execute("revoke postgrest_anonymous from postgrest_authenticator;")
-    execute("drop role postgrest_anonymous;")
-
-    execute("""
-    do 
-    $$ 
-    begin
-      execute format('revoke connect on database %I from postgrest_authenticator', current_database());
-    end;
-    $$;
-    """)
-
-    execute("drop role postgrest_authenticator;")
   end
 end
