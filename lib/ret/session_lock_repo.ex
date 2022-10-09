@@ -2,7 +2,7 @@
 # execute in a session context (vs a transaction context) when running in an environment
 # with pgbouncer.
 defmodule Ret.SessionLockRepo do
-  use Ecto.Repo, otp_app: :ret, adapter: Ecto.Adapters.Postgres
+  use Ecto.Repo, otp_app: :ret, adapter: Ecto.Adapters.CockroachDB
 
   def init(_, opts) do
     {:ok, opts}

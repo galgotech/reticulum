@@ -3,7 +3,7 @@ defmodule Ret.Repo.Migrations.CreateAvatars do
 
   def change do
     create table(:avatars, primary_key: false) do
-      add(:avatar_id, :bigint, default: fragment("ret0.next_id()"), primary_key: true)
+      add(:avatar_id, :bigint, default: fragment("unique_rowid()"), primary_key: true)
       add(:avatar_sid, :string)
       add(:slug, :string, null: false)
       add(:parent_avatar_id, references(:avatars, column: :avatar_id))

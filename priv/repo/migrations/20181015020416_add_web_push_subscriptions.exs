@@ -3,7 +3,7 @@ defmodule Ret.Repo.Migrations.AddWebPushSubscriptions do
 
   def change do
     create table(:web_push_subscriptions, primary_key: false) do
-      add(:web_push_subscription_id, :bigint, default: fragment("ret0.next_id()"), primary_key: true)
+      add(:web_push_subscription_id, :bigint, null: false, default: fragment("unique_rowid()"), primary_key: true)
       add(:p256dh, :string, null: false)
       add(:endpoint, :string, null: false)
       add(:auth, :binary, null: false)

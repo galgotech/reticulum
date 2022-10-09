@@ -16,6 +16,7 @@ end
 defmodule Ret.Account do
   use Ecto.Schema
   import Ecto.Query
+  import Ecto.Changeset
 
   alias Ret.{Repo, Account, Guardian, AccountExternal}
 
@@ -42,7 +43,11 @@ defmodule Ret.Account do
       |> Repo.one()
 
     cond do
-      account == nil -> Repo.insert!(%Account{external_id: external_id})
+      account == nil ->
+          %Account{external_id: external_id}
+          |> cast(%{}, [:external_id])
+          |> unique_constraint(:external_id)
+          |> Repo.insert!(on_conflict: :nothing)
       true -> nil
     end
   end

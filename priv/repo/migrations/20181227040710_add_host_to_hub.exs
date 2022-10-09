@@ -6,6 +6,6 @@ defmodule Ret.Repo.Migrations.AddHostToHub do
       add(:host, :string)
     end
 
-    create(index(:hubs, [:host, :inserted_at], where: "host is not null"))
+    create(index(:hubs, [:host, :inserted_at]))
   end
 end

@@ -5,7 +5,7 @@ defmodule Ret.Repo.Migrations.AddSceneListings do
     Ret.SceneListing.State.create_type()
 
     create table(:scene_listings, primary_key: false) do
-      add(:scene_listing_id, :bigint, default: fragment("ret0.next_id()"), primary_key: true)
+      add(:scene_listing_id, :bigint, default: fragment("unique_rowid()"), primary_key: true)
       add(:scene_listing_sid, :string)
       add(:scene_id, :bigint, null: false)
       add(:slug, :string, null: false)

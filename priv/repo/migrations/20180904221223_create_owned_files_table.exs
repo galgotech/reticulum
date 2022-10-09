@@ -3,7 +3,7 @@ defmodule Ret.Repo.Migrations.CreateFilesTable do
 
   def change do
     create table(:owned_files, primary_key: false) do
-      add(:owned_file_id, :bigint, default: fragment("ret0.next_id()"), primary_key: true)
+      add(:owned_file_id, :bigint, null: false, default: fragment("unique_rowid()"), primary_key: true)
       add(:owned_file_uuid, :string, null: false)
       add(:key, :string, null: false)
       add(:account_id, :bigint, null: false)

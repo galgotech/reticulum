@@ -3,7 +3,7 @@ defmodule Ret.Repo.Migrations.CreateHubRoleMemberships do
 
   def change do
     create table(:hub_role_memberships, primary_key: false) do
-      add(:hub_role_membership_id, :bigint, default: fragment("ret0.next_id()"), primary_key: true)
+      add(:hub_role_membership_id, :bigint, default: fragment("unique_rowid()"), primary_key: true)
       add(:hub_id, references(:hubs, column: :hub_id))
       add(:account_id, references(:accounts, column: :account_id), null: false)
 

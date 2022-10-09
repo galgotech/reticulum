@@ -16,15 +16,6 @@ defmodule Ret.Repo.Migrations.AddAvatarListingsAccount do
         check: "avatar_id is not null or (avatar_id is null and state = 'delisted')"
       )
     )
-
-    flush()
-
-    from(l in "avatar_listings",
-      join: a in Avatar,
-      on: a.avatar_id == l.avatar_id,
-      update: [set: [account_id: a.account_id]]
-    )
-    |> repo().update_all([])
   end
 
   def down do

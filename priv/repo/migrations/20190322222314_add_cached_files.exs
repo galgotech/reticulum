@@ -3,7 +3,7 @@ defmodule Ret.Repo.Migrations.AddCachedFiles do
 
   def change do
     create table(:cached_files, primary_key: false) do
-      add(:cached_file_id, :bigint, default: fragment("ret0.next_id()"), primary_key: true)
+      add(:cached_file_id, :bigint, default: fragment("unique_rowid()"), primary_key: true)
       add(:cache_key, :string, null: false)
       add(:file_uuid, :string, null: false)
       add(:file_key, :string, null: false)

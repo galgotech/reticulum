@@ -22,7 +22,6 @@ defmodule Ret.Application do
         # Can't check mix_env here, so check db name
         if db_name !== "ret_test" do
           coturn_enabled = Ret.Coturn.enabled?()
-
           Ecto.Adapters.SQL.query!(Ret.SessionLockRepo, "CREATE SCHEMA IF NOT EXISTS ret0")
 
           if coturn_enabled do
