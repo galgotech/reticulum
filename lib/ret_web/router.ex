@@ -49,6 +49,7 @@ defmodule RetWeb.Router do
     plug(RetWeb.Guardian.AuthPipeline)
     plug(RetWeb.Canary.AuthorizationPipeline)
     plug(RetWeb.Plugs.ForbidDisabledAccounts)
+    plug(RetWeb.Plugs.RouteAuthorization)
   end
 
   pipeline :canonicalize_domain do
