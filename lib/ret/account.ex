@@ -1,18 +1,3 @@
-defmodule Ret.AccountExternal do
-
-  alias Ret.{AccountExternal}
-
-  defstruct account_id: 0, is_admin: true, state: :enabled
-
-  def perms(%AccountExternal{} = account) do
-    %{
-
-    }
-  end
-
-end
-
-
 defmodule Ret.Account do
   use Ecto.Schema
   import Ecto.Query
@@ -52,10 +37,8 @@ defmodule Ret.Account do
     end
   end
 
-  def external(%Account{} = account) do
-    %AccountExternal{account_id: account.account_id}
+  def external(%Account{} = account, token) do
+    account.account_id |> AccountExternal.load(token)
   end
-
-  # defstruct email: "", account_id: "", is_admin: false, state: :disabled
 
 end

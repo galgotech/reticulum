@@ -67,16 +67,10 @@ defmodule RetWeb.HubChannel do
         _ -> nil
       end
 
-    account_can_update = account |> Account.external() |> can?(update_hub(hub))
-
-    decoded_perms = account |> Account.external() |> AccountExternal.perms()
-    has_perms_token = decoded_perms != nil
-
-    perms_token_can_join =
-      case decoded_perms do
-        {:ok, %{"join_hub" => true}} -> true
-        _ -> false
-      end
+    account_external = account |> Account.external(params["auth_token"])
+    account_can_update = account_external |> can?(update_hub(hub))
+    has_perms_token = account_external.perms
+    perms_token_can_join = account_external |> can?(join_hub(hub))
 
     params =
       params
@@ -247,6 +241,7 @@ defmodule RetWeb.HubChannel do
 
   def handle_in("sign_out", _payload, socket) do
     socket = Guardian.Phoenix.Socket.put_current_resource(socket, nil)
+    socket = Guardian.Phoenix.Socket.put_current_token(socket, nil)
     broadcast_presence_update(socket)
 
     # Disconnect
@@ -334,8 +329,6 @@ defmodule RetWeb.HubChannel do
       description_changed = hub.description != payload["description"]
       member_permissions_changed = hub.member_permissions != payload |> Hub.member_permissions_from_attrs()
       room_size_changed = hub.room_size != payload["room_size"]
-      can_change_promotion = account |> can?(update_hub_promotion(hub))
-      promotion_changed = can_change_promotion and hub.allow_promotion != payload["allow_promotion"]
       # Older clients may not send an entry_mode in the payload.
       entry_mode_changed = payload["entry_mode"] !== nil and hub.entry_mode != payload["entry_mode"]
 
@@ -344,13 +337,11 @@ defmodule RetWeb.HubChannel do
       stale_fields = if description_changed, do: ["description" | stale_fields], else: stale_fields
       stale_fields = if member_permissions_changed, do: ["member_permissions" | stale_fields], else: stale_fields
       stale_fields = if room_size_changed, do: ["room_size" | stale_fields], else: stale_fields
-      stale_fields = if promotion_changed, do: ["allow_promotion" | stale_fields], else: stale_fields
       stale_fields = if entry_mode_changed, do: ["entry_mode" | stale_fields], else: stale_fields
 
       hub
       |> Hub.add_attrs_to_changeset(payload)
       |> Hub.add_member_permissions_to_changeset(payload)
-      |> Hub.maybe_add_promotion_to_changeset(account, hub, payload)
       |> Hub.maybe_add_entry_mode_to_changeset(payload)
       |> Repo.update!()
       |> Repo.preload(Hub.hub_preloads())
@@ -545,8 +536,9 @@ defmodule RetWeb.HubChannel do
   defp handle_entry_mode_change(socket, entry_mode) do
     hub = socket |> hub_for_socket
     account = Guardian.Phoenix.Socket.current_resource(socket)
+    token = Guardian.Phoenix.Socket.current_token(socket)
 
-    if account |> can?(close_hub(hub)) do
+    if account |> Account.external(token) |> can?(close_hub(hub)) do
       hub
       |> Hub.changeset_for_entry_mode(entry_mode)
       |> Repo.update!()
@@ -641,10 +633,11 @@ defmodule RetWeb.HubChannel do
   defp presence_meta_for_socket(socket) do
     hub = socket |> hub_for_socket
     account = Guardian.Phoenix.Socket.current_resource(socket)
+    token = Guardian.Phoenix.Socket.current_token(socket)
 
     socket.assigns
     |> Map.put(:roles, hub |> Hub.roles_for_account(account))
-    |> Map.put(:permissions, hub |> Hub.perms_for_account(account |> Account.external()))
+    |> Map.put(:permissions, hub |> Hub.perms_for_account(account |> Account.external(token)))
     |> Map.take([:presence, :profile, :context, :roles, :permissions, :streaming, :recording, :hand_raised, :typing])
   end
 
@@ -686,12 +679,13 @@ defmodule RetWeb.HubChannel do
         hub.web_push_subscriptions |> Enum.any?(&(&1.endpoint == push_subscription_endpoint))
 
     socket = Guardian.Phoenix.Socket.put_current_resource(socket, account)
+    socket = Guardian.Phoenix.Socket.put_current_token(socket, params["auth_token"])
 
     with socket <-
            socket
            |> assign(:hub_sid, hub.hub_sid)
            |> assign(:presence, :lobby),
-         response <- HubView.render("show.json", %{hub: hub, embeddable: account |> Account.external() |> can?(embed_hub(hub))}) do
+         response <- HubView.render("show.json", %{hub: hub, embeddable: account |> Account.external(params["auth_token"]) |> can?(embed_hub(hub))}) do
 
       response =
         response

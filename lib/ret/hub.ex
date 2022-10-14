@@ -99,8 +99,6 @@ defmodule Ret.Hub do
     belongs_to(:created_by_account, Ret.Account, references: :account_id)
     has_many(:hub_role_memberships, Ret.HubRoleMembership, foreign_key: :hub_id)
 
-    field(:allow_promotion, :boolean)
-
     field(:room_size, :integer)
 
     timestamps()
@@ -125,6 +123,16 @@ defmodule Ret.Hub do
     :last_active_at,
     :entry_mode | @required_keys
   ]
+
+  def list_room_by_scenes(scenes) do
+    Hub
+    |> join(:inner, [h], s in assoc(h, :scene), on: h.scene_id == s.scene_id and s.scene_sid in ^scenes)
+    |> where([h], h.entry_mode in ^["allow"])
+    |> order_by(desc: :inserted_at)
+    |> preload(^Hub.hub_preloads())
+    |> Repo.all
+    # |> Repo.paginate(params)
+  end
 
   # TODO: This function was created for use in the public API.
   #       It would be good to revisit this and the alternatives below
@@ -398,16 +406,6 @@ defmodule Ret.Hub do
 
     changeset
     |> put_change(:member_permissions, member_permissions)
-  end
-
-  def maybe_add_promotion_to_changeset(changeset, account, hub, attrs) do
-    can_change_promotion = account |> can?(update_hub_promotion(hub))
-    if can_change_promotion, do: changeset |> add_promotion_to_changeset(attrs), else: changeset
-  end
-
-  def add_promotion_to_changeset(changeset, attrs) do
-    changeset
-    |> put_change(:allow_promotion, Map.get(attrs, "allow_promotion", false) || Map.get(attrs, :allow_promotion, false))
   end
 
   def maybe_add_entry_mode_to_changeset(changeset, attrs) do
@@ -740,21 +738,11 @@ defmodule Ret.Hub do
     changeset
   end
 
-  def maybe_add_promotion(changeset, account, hub, %{"allow_promotion" => _} = hub_params),
-    do: changeset |> Hub.maybe_add_promotion_to_changeset(account, hub, hub_params)
-
-  def maybe_add_promotion(changeset, account, hub, %{allow_promotion: _} = hub_params),
-    do: changeset |> Hub.maybe_add_promotion_to_changeset(account, hub, hub_params)
-
-  def maybe_add_promotion(changeset, _account, _hub, _), do: changeset
-
   # The account argument here can be a Ret.Account.
   def perms_for_account(%Ret.Hub{} = hub, account) do
     %{
       join_hub: account |> can?(join_hub(hub)),
       update_hub: account |> can?(update_hub(hub)),
-      update_hub_promotion: account |> can?(update_hub_promotion(hub)),
-      update_roles: account |> can?(update_roles(hub)),
       close_hub: account |> can?(close_hub(hub)),
       embed_hub: account |> can?(embed_hub(hub)),
       kick_users: account |> can?(kick_users(hub)),
@@ -779,13 +767,7 @@ end
 defimpl Canada.Can, for: Ret.AccountExternal do
   alias Ret.{Hub, AppConfig}
 
-  def can?(%Ret.AccountExternal{is_admin: is_admin}, :create_credentials, _params) do
-    is_admin
-  end
-
-  @owner_actions [:update_hub, :close_hub, :embed_hub, :kick_users, :mute_users, :amplify_audio]
   @object_actions [:spawn_and_move_media, :spawn_camera, :spawn_drawing, :pin_objects, :spawn_emoji, :fly]
-  @creator_actions [:update_roles]
 
   # Always deny all actions to disabled accounts
   def can?(%Ret.AccountExternal{state: :disabled}, _, _), do: false
@@ -793,42 +775,25 @@ defimpl Canada.Can, for: Ret.AccountExternal do
   # Always deny access to non-enterable hubs
   def can?(%Ret.AccountExternal{}, :join_hub, %Ret.Hub{entry_mode: :deny}), do: false
 
-  def can?(%Ret.AccountExternal{} = account, :update_hub_promotion, %Ret.Hub{} = hub) do
-    owners_can_change_promotion = Ret.AppConfig.get_config_bool("features|public_rooms")
-    !!account.is_admin or (owners_can_change_promotion and can?(account, :update_hub, hub))
-  end
-
-  # Unbound hubs - Creator can perform creator actions
-  def can?(%Ret.AccountExternal{account_id: account_id}, action, %Ret.Hub{
-        created_by_account_id: created_by_account_id,
-      })
-      when action in @creator_actions and created_by_account_id != nil and created_by_account_id == account_id,
-      do: true
+  # Join hub
+  def can?(%Ret.AccountExternal{join_hub: true}, :join_hub, %Ret.Hub{entry_mode: :allow}), do: true
 
   # Unbound hubs - Owners can perform special actions
-  def can?(%Ret.AccountExternal{account_id: account_id}, action, %Ret.Hub{} = hub)
-      when action in @owner_actions,
-      do: hub |> Ret.Hub.is_owner?(account_id)
+  def can?(%Ret.AccountExternal{account_id: account_id, update_hub: true}, action, %Ret.Hub{} = hub), do: true # hub |> Ret.Hub.is_owner?(account_id)
+  def can?(%Ret.AccountExternal{account_id: account_id, close_hub: true}, action, %Ret.Hub{} = hub), do: true # hub |> Ret.Hub.is_owner?(account_id)
+  def can?(%Ret.AccountExternal{account_id: account_id, embed_hub: true}, action, %Ret.Hub{} = hub), do: true # hub |> Ret.Hub.is_owner?(account_id)
+  def can?(%Ret.AccountExternal{account_id: account_id, kick_users: true}, action, %Ret.Hub{} = hub), do: true # hub |> Ret.Hub.is_owner?(account_id)
+  def can?(%Ret.AccountExternal{account_id: account_id, mute_users: true}, action, %Ret.Hub{} = hub), do: true # hub |> Ret.Hub.is_owner?(account_id)
+  def can?(%Ret.AccountExternal{account_id: account_id, amplify_audio: true}, action, %Ret.Hub{} = hub), do: true # hub |> Ret.Hub.is_owner?(account_id)
 
   # Unbound hubs - Object actions can be performed if granted in member permissions or if account is an owner
-  def can?(%Ret.AccountExternal{account_id: account_id}, action, %Hub{} = hub) when action in @object_actions do
-    hub |> Hub.has_member_permission?(action) or hub |> Ret.Hub.is_owner?(account_id)
+  def can?(%Ret.AccountExternal{account_id: account_id} = account, action, %Hub{} = hub) when action in @object_actions do
+    account[action]
+    #hub |>  Hub.has_member_permission?(action) or hub |> Ret.Hub.is_owner?(account_id)
   end
 
-  @self_allowed_actions [:get_rooms_created_by]
-  # Allow accounts to access their own rooms
-  def can?(%Ret.AccountExternal{} = a, action, %Ret.Account{} = b) when action in @self_allowed_actions,
-    do: a.account_id == b.account_id
-
   # Create hubs
-  def can?(%Ret.AccountExternal{is_admin: true}, :create_hub, _), do: true
-
-  def can?(_account, :create_hub, _),
-    do: !AppConfig.get_cached_config_value("features|disable_room_creation")
-
-  # Create accounts
-  def can?(%Ret.AccountExternal{is_admin: true}, :create_account, _), do: true
-  def can?(_account, :create_account, _), do: !AppConfig.get_cached_config_value("features|disable_sign_up")
+  def can?(%Ret.AccountExternal{create_hub: true}, :create_hub, _), do: true
 
   # Deny permissions for any other case that falls through
   def can?(_, _, _), do: false
@@ -837,7 +802,6 @@ end
 # Permissions for app tokens and un-authenticated clients
 defimpl Canada.Can, for: Atom do
   @allowed_app_token_actions [
-    :get_rooms_created_by,
     :create_hub,
     :update_hub
   ]
@@ -847,7 +811,7 @@ defimpl Canada.Can, for: Atom do
 
   # Allow app tokens to act like owners/creators if the room has no bindings
   def can?(:reticulum_app_token, action, %Ret.Hub{})
-      when action in [:embed_hub, :update_roles],
+      when action in [:embed_hub],
       do: true
 
   def can?(:reticulum_app_token, _, _), do: false
@@ -866,9 +830,6 @@ defimpl Canada.Can, for: Atom do
   # Create hubs
   def can?(_, :create_hub, _),
     do: !AppConfig.get_cached_config_value("features|disable_room_creation")
-
-  # Create accounts
-  def can?(_, :create_account, _), do: !AppConfig.get_cached_config_value("features|disable_sign_up")
 
   def can?(_, _, _), do: false
 end

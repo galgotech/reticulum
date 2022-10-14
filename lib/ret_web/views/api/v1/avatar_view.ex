@@ -24,7 +24,6 @@ defmodule RetWeb.Api.V1.AvatarView do
       # Only include account id on your own avatars
       account_id: account && avatar.account_id == account.account_id && avatar.account_id |> Integer.to_string(),
       allow_remixing: avatar.allow_remixing,
-      allow_promotion: avatar.allow_promotion,
       has_listings: length(avatar.avatar_listings |> Enum.filter(fn l -> l.state == :active end)) > 0
     })
   end
@@ -36,7 +35,6 @@ defmodule RetWeb.Api.V1.AvatarView do
       type: "avatar_listing",
       avatar_id: listing.avatar_listing_sid,
       allow_remixing: listing.avatar.allow_remixing,
-      allow_promotion: listing.avatar.allow_promotion
     })
   end
 

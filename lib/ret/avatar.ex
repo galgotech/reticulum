@@ -44,7 +44,6 @@ defmodule Ret.Avatar do
     has_many(:avatar_listings, AvatarListing, foreign_key: :avatar_id, references: :avatar_id, on_replace: :nilify)
 
     field(:allow_remixing, :boolean)
-    field(:allow_promotion, :boolean)
 
     field(:imported_from_host, :string)
     field(:imported_from_port, :integer)
@@ -268,7 +267,6 @@ defmodule Ret.Avatar do
         imported_from_host: imported_from_host,
         imported_from_port: imported_from_port,
         imported_from_sid: imported_from_sid,
-        allow_promotion: true
       })
       |> Repo.insert_or_update()
 
@@ -290,7 +288,6 @@ defmodule Ret.Avatar do
       :description,
       :attributions,
       :allow_remixing,
-      :allow_promotion,
       :imported_from_host,
       :imported_from_port,
       :imported_from_sid

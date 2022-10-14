@@ -1,6 +1,17 @@
 defmodule RetWeb.Api.V1.HubView do
   use RetWeb, :view
-  alias Ret.{Hub, Scene, SceneListing}
+  alias Ret.{OwnedFile, Hub, Scene, SceneListing}
+
+  def render("index.json", %{results: results}) do
+    results
+    |> Enum.map(fn hub -> %{
+      hub_sid: hub.hub_sid,
+      name: hub.name,
+      slug: hub.slug,
+      scene_sid: hub.scene.scene_sid,
+      screenshot_url: hub.scene.screenshot_owned_file |> OwnedFile.uri_for() |> URI.to_string(),
+    } end)
+  end
 
   def render("create.json", %{hub: hub}) do
     %{
@@ -33,7 +44,6 @@ defmodule RetWeb.Api.V1.HubView do
           description: hub.description,
           user_data: hub.user_data,
           slug: hub.slug,
-          allow_promotion: hub.allow_promotion,
           # The entry code feature has been removed. We return 0 here to
           # maintain compatibility with older clients.
           entry_code: 0,
@@ -66,7 +76,6 @@ defmodule RetWeb.Api.V1.HubView do
           description: hub.description,
           user_data: hub.user_data,
           slug: hub.slug,
-          allow_promotion: hub.allow_promotion,
           # The entry code feature has been removed. We return 0 here to
           # maintain compatibility with older clients.
           entry_code: 0,

@@ -74,6 +74,7 @@ defmodule RetWeb.Router do
 
     scope "/v1", as: :api_v1 do
       pipe_through([:forbid_disabled_accounts])
+      resources("/hubs", Api.V1.HubController, only: [:index])
       resources("/hubs", Api.V1.HubController, only: [:create, :delete])
     end
 

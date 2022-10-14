@@ -58,7 +58,6 @@ defmodule RetWeb.Api.V1.SceneView do
       parent_scene_id: (scene.parent_scene_listing || scene.parent_scene) |> Scene.to_sid(),
       attribution: scene.attribution,
       allow_remixing: scene.allow_remixing,
-      allow_promotion: scene.allow_promotion,
       type: "scene"
     })
   end

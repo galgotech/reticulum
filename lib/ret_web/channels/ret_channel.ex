@@ -13,6 +13,7 @@ defmodule RetWeb.RetChannel do
       {:ok, %Account{} = account, _claims} ->
         socket
         |> Guardian.Phoenix.Socket.put_current_resource(account)
+        |> Guardian.Phoenix.Socket.put_current_token(token)
         |> handle_join(hub_id)
 
       {:error, reason} ->

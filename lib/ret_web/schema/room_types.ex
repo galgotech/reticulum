@@ -65,8 +65,6 @@ defmodule RetWeb.Schema.RoomTypes do
     field(:slug, :string)
     @desc "A description of the room"
     field(:description, :string)
-    @desc "Makes this room as public (while it is still open)"
-    field(:allow_promotion, :boolean)
 
     @desc "Temporary entry code"
     field(:entry_code, :string) do

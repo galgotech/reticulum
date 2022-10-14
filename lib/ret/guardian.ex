@@ -7,7 +7,7 @@ defmodule Ret.Guardian do
 
   alias Ret.{Account, AccountExternal, Repo}
 
-  def subject_for_token(%Account{} = account, _claims) do
+  def subject_for_token(%Account{} = account, claims) do
     {:ok, account.account_id |> to_string}
   end
 

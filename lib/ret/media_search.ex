@@ -66,10 +66,6 @@ defmodule Ret.MediaSearch do
     assets_search(cursor, type, account_id, query)
   end
 
-  def search(%Ret.MediaSearchQuery{source: "rooms", filter: "public", cursor: cursor, q: q}) do
-    public_rooms_search(cursor, q)
-  end
-
   def search(%Ret.MediaSearchQuery{source: "sketchfab", cursor: cursor, filter: nil, collection: nil, q: q})
       when q == nil or q == "" do
     search(%Ret.MediaSearchQuery{source: "sketchfab", cursor: cursor, filter: "featured", q: q})
@@ -433,20 +429,6 @@ defmodule Ret.MediaSearch do
     {:commit, results}
   end
 
-  defp public_rooms_search(cursor, _query) do
-    page_number = (cursor || "1") |> Integer.parse() |> elem(0)
-
-    results =
-      Hub
-      |> where([h], h.allow_promotion and h.entry_mode == ^"allow")
-      |> preload(scene: [:screenshot_owned_file], scene_listing: [:scene, :screenshot_owned_file])
-      |> order_by(desc: :inserted_at)
-      |> Repo.paginate(%{page: page_number, page_size: @page_size})
-      |> result_for_page(page_number, :public_rooms, &hub_to_entry/1)
-
-    {:commit, results}
-  end
-
   defp add_type_to_asset_search_query(query, nil), do: query
   defp add_type_to_asset_search_query(query, type), do: query |> where([a], a.type == ^type)
   defp add_query_to_asset_search_query(query, nil), do: query
@@ -492,60 +474,6 @@ defmodule Ret.MediaSearch do
       |> order_by(^order)
       |> Repo.paginate(%{page: page_number, page_size: @page_size})
       |> result_for_page(page_number, :avatar, &avatar_to_entry/1)
-
-    {:commit, results}
-  end
-
-  defp avatar_listing_search(cursor, query, filter, similar_to, order \\ [asc: :order, desc: :updated_at]) do
-    page_number = (cursor || "1") |> Integer.parse() |> elem(0)
-
-    results =
-      AvatarListing
-      |> join(:inner, [l], a in assoc(l, :avatar))
-      |> where([l, a], l.state == ^"active" and a.state == ^"active" and a.allow_promotion == ^true)
-      |> add_query_to_listing_search_query(query)
-      |> add_tag_to_listing_search_query(filter)
-      |> add_similar_to_to_listing_search_query(similar_to)
-      |> preload([:thumbnail_owned_file, :avatar])
-      |> order_by(^order)
-      |> Repo.paginate(%{page: page_number, page_size: @page_size})
-      |> result_for_page(page_number, :avatar_listings, &avatar_listing_to_entry/1)
-
-    {:commit, results}
-  end
-
-  defp scene_listing_remixable_search(cursor, query, order \\ [desc: :updated_at]) do
-    page_number = (cursor || "1") |> Integer.parse() |> elem(0)
-
-    results =
-      SceneListing
-      |> join(:inner, [l], s in assoc(l, :scene))
-      |> where(
-        [l, s],
-        l.state == ^"active" and s.state == ^"active" and s.allow_promotion == ^true and s.allow_remixing == ^true
-      )
-      |> add_query_to_listing_search_query(query)
-      |> preload([:screenshot_owned_file, :model_owned_file, :scene_owned_file, :project, scene: [:project]])
-      |> order_by(^order)
-      |> Repo.paginate(%{page: page_number, page_size: @scene_page_size})
-      |> result_for_page(page_number, :scene_listings, &scene_or_scene_listing_to_entry/1)
-
-    {:commit, results}
-  end
-
-  defp scene_listing_search(cursor, query, filter, order \\ [desc: :updated_at]) do
-    page_number = (cursor || "1") |> Integer.parse() |> elem(0)
-
-    results =
-      SceneListing
-      |> join(:inner, [l], s in assoc(l, :scene))
-      |> where([l, s], l.state == ^"active" and s.state == ^"active" and s.allow_promotion == ^true)
-      |> add_query_to_listing_search_query(query)
-      |> add_tag_to_listing_search_query(filter)
-      |> preload([:screenshot_owned_file, :model_owned_file, :scene_owned_file, :project, scene: [:project]])
-      |> order_by(^order)
-      |> Repo.paginate(%{page: page_number, page_size: @scene_page_size})
-      |> result_for_page(page_number, :scene_listings, &scene_or_scene_listing_to_entry/1)
 
     {:commit, results}
   end

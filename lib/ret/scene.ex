@@ -38,7 +38,6 @@ defmodule Ret.Scene do
     field(:attribution, :string)
     field(:attributions, :map)
     field(:allow_remixing, :boolean)
-    field(:allow_promotion, :boolean)
 
     field(:imported_from_host, :string)
     field(:imported_from_port, :integer)
@@ -89,7 +88,6 @@ defmodule Ret.Scene do
       description: scene.description,
       attributions: scene.attributions,
       allow_remixing: scene.allow_remixing,
-      allow_promotion: scene.allow_promotion
     }
   end
 
@@ -99,7 +97,6 @@ defmodule Ret.Scene do
       description: scene.description,
       attributions: scene.attributions,
       allow_remixing: scene.scene.allow_remixing,
-      allow_promotion: scene.scene.allow_promotion
     }
   end
 
@@ -172,7 +169,6 @@ defmodule Ret.Scene do
         imported_from_host: imported_from_host,
         imported_from_port: imported_from_port,
         imported_from_sid: imported_from_sid,
-        allow_promotion: true
       })
       |> Repo.insert_or_update()
 
@@ -240,7 +236,6 @@ defmodule Ret.Scene do
       :attribution,
       :attributions,
       :allow_remixing,
-      :allow_promotion,
       :imported_from_host,
       :imported_from_port,
       :imported_from_sid,

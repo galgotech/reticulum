@@ -9,7 +9,7 @@ defmodule Ret.Meta do
     %{
       version: @version,
       phx_host: module_config(:phx_host) || :net_adm.localhost() |> :net_adm.dns_hostname() |> elem(1) |> to_string,
-      phx_port: Application.get_env(:ret, RetWeb.Endpoint)[:https][:port] |> to_string,
+      phx_port: module_config(:phx_port) || Application.get_env(:ret, RetWeb.Endpoint)[:http][:port] |> to_string,
       pool: Application.get_env(:ret, Ret)[:pool]
     }
   end
@@ -18,7 +18,7 @@ defmodule Ret.Meta do
     %{
       repo: %{
         accounts: %{
-          any: Ret.Account.has_accounts?(),
+          any: true,
         },
         avatar_listings: %{
           any: Ret.AvatarListing.has_any_in_filter?(nil),

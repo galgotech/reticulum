@@ -1,15 +1,22 @@
 defmodule RetWeb.Api.V1.HubController do
   use RetWeb, :controller
 
-  alias Ret.{Hub, Scene, Repo, Account}
+  alias Ret.{Hub, Scene, Repo, Account, AccountExternal}
 
   import Canada, only: [can?: 2]
 
   # Limit to 1 TPS
-  plug(RetWeb.Plugs.RateLimit)
+  # plug(RetWeb.Plugs.RateLimit)
 
-  # Only allow access to remove hubs with secret header
-  plug(RetWeb.Plugs.HeaderAuthorization when action in [:delete])
+  def index(conn, _params) do
+    token = Guardian.Plug.current_token(conn)
+    scenes = AccountExternal.scene(token)
+
+    results = scenes
+    |> Hub.list_room_by_scenes()
+
+    conn |> render("index.json", results: results)
+  end
 
   def create(conn, %{"hub" => _hub_params} = params) do
     Hub.create_new_room(params["hub"], false)
@@ -18,8 +25,9 @@ defmodule RetWeb.Api.V1.HubController do
 
   defp exec_create(hub_changeset, conn) do
     account = Guardian.Plug.current_resource(conn)
+    token = Guardian.Plug.current_token(conn)
 
-    if account |> Account.external() |> can?(create_hub(nil)) do
+    if account |> Account.external(token) |> can?(create_hub(nil)) do
       {result, hub} =
         hub_changeset
         |> Hub.add_account_to_changeset(account)
@@ -69,7 +77,6 @@ defmodule RetWeb.Api.V1.HubController do
       |> Hub.add_attrs_to_changeset(hub_params)
       |> maybe_add_new_scene(scene)
       |> Hub.maybe_add_member_permissions(hub, hub_params)
-      |> Hub.maybe_add_promotion(account, hub, hub_params)
 
     hub = changeset |> Repo.update!() |> Repo.preload(Hub.hub_preloads())
 
@@ -81,11 +88,17 @@ defmodule RetWeb.Api.V1.HubController do
   defp maybe_add_new_scene(changeset, scene), do: changeset |> Hub.add_new_scene_to_changeset(scene)
 
   def delete(conn, %{"id" => hub_sid}) do
-    Hub
-    |> Repo.get_by(hub_sid: hub_sid)
-    |> Hub.changeset_for_entry_mode(:deny)
-    |> Repo.update!()
+    account = Guardian.Plug.current_resource(conn)
+    token = Guardian.Plug.current_token(conn)
+    hub = Hub |> Repo.get_by(hub_sid: hub_sid)
 
-    conn |> send_resp(200, "OK")
+    if account |> Account.external(token) |> can?(close_hub(hub)) do
+      hub
+      |> Hub.changeset_for_entry_mode(:deny)
+      |> Repo.update!()
+      conn |> send_resp(200, "OK")
+    else
+      conn |> send_resp(403, "Denied")
+    end
   end
 end

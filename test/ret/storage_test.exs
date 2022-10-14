@@ -39,13 +39,6 @@ defmodule Ret.StorageTest do
     assert_fetch_result(result, "text/plain", "test")
   end
 
-  test "should not be able to promote a file with an invalid promotion token", %{temp_file: temp_file} do
-    account = Ret.Repo.insert!(%Ret.Account{})
-
-    {:ok, uuid} = Storage.store(%Plug.Upload{path: temp_file}, "text/plain", "secret", "promotion_secret")
-    {:error, :not_allowed} = Storage.promote(uuid, "secret", "invalid_promotion_secret", account)
-  end
-
   test "should be able to re-promote without failure", %{temp_file: temp_file} do
     account = Ret.Repo.insert!(%Ret.Account{})
 

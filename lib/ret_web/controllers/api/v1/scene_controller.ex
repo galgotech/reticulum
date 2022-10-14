@@ -1,7 +1,7 @@
 defmodule RetWeb.Api.V1.SceneController do
   use RetWeb, :controller
 
-  alias Ret.{Account, Repo, Scene, SceneListing, Storage}
+  alias Ret.{Account, Repo, Scene, AccountExternal, SceneListing, Storage}
 
   plug(RetWeb.Plugs.RateLimit when action in [:create, :update])
 
@@ -23,8 +23,9 @@ defmodule RetWeb.Api.V1.SceneController do
 
   def show(conn, %{"id" => scene_sid}) do
     account = Guardian.Plug.current_resource(conn)
+    token = Guardian.Plug.current_token(conn)
 
-    case scene_sid |> get_scene() do
+    case scene_sid |> AccountExternal.scene(token) |> get_scene() do
       %t{} = s when t in [Scene, SceneListing] -> conn |> render("show.json", scene: s, account: account)
       _ -> conn |> send_resp(404, "not found")
     end
@@ -36,7 +37,9 @@ defmodule RetWeb.Api.V1.SceneController do
   end
 
   def update(conn, %{"id" => scene_sid, "scene" => params}) do
-    case scene_sid |> get_scene() do
+    token = Guardian.Plug.current_token(conn)
+
+    case scene_sid |> AccountExternal.scene(token) |> get_scene() do
       %Scene{} = scene -> create_or_update(conn, params, scene)
       _ -> conn |> send_resp(404, "not found")
     end
@@ -44,8 +47,9 @@ defmodule RetWeb.Api.V1.SceneController do
 
   def create(conn, %{"parent_scene_id" => scene_sid}) do
     account = Guardian.Plug.current_resource(conn)
+    token = Guardian.Plug.current_token(conn)
 
-    case scene_sid |> get_scene() do
+    case scene_sid |> AccountExternal.scene(token) |> get_scene() do
       %t{} = s when t in [Scene, SceneListing] ->
         new_scene = s |> Scene.new_scene_from_parent_scene(account) |> preload()
         conn |> render("show.json", account: account, scene: new_scene)

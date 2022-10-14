@@ -13,7 +13,6 @@ defmodule Ret.Repo.Migrations.CreateAvatars do
       add(:attributions, :jsonb)
 
       add(:allow_remixing, :boolean, null: false, default: false)
-      add(:allow_promotion, :boolean, null: false, default: false)
 
       add(:account_id, references(:accounts, column: :account_id), null: false)
 

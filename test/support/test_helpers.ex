@@ -81,7 +81,6 @@ defmodule Ret.TestHelpers do
       |> Scene.changeset(account, owned_file, owned_file, owned_file, %{
         name: "Test Scene",
         description: "Test Scene Description",
-        allow_promotion: true
       })
       |> Repo.insert_or_update()
 
@@ -140,16 +139,6 @@ defmodule Ret.TestHelpers do
 
   def create_hub(%{scene: scene}) do
     {:ok, hub} = %Hub{} |> Hub.changeset(scene, %{name: "Test Hub"}) |> Repo.insert()
-
-    {:ok, hub: hub}
-  end
-
-  def create_public_hub(%{scene: scene}) do
-    {:ok, hub} =
-      %Hub{}
-      |> Hub.changeset(scene, %{name: "Test Public Hub"})
-      |> Hub.add_promotion_to_changeset(%{"allow_promotion" => true})
-      |> Repo.insert()
 
     {:ok, hub: hub}
   end
