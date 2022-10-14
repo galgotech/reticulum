@@ -32,30 +32,8 @@ defmodule Ret.MediaSearch do
   # @max_file_size_bytes 20 * 1024 * 1024
   # @max_collection_file_size_bytes 100 * 1024 * 1024
 
-  def search(%Ret.MediaSearchQuery{source: "scene_listings", cursor: cursor, filter: "featured", q: query}) do
-    scene_listing_search(cursor, query, "featured", asc: :order)
-  end
-
-  def search(%Ret.MediaSearchQuery{source: "scene_listings", cursor: cursor, filter: "remixable", q: query}) do
-    scene_listing_remixable_search(cursor, query)
-  end
-
-  def search(%Ret.MediaSearchQuery{source: "scene_listings", cursor: cursor, filter: filter, q: query}) do
-    scene_listing_search(cursor, query, filter)
-  end
-
   def search(%Ret.MediaSearchQuery{source: "scenes", cursor: cursor, filter: filter, user: account_id, q: query}) do
     scene_search(cursor, query, filter, account_id)
-  end
-
-  def search(%Ret.MediaSearchQuery{
-        source: "avatar_listings",
-        cursor: cursor,
-        filter: filter,
-        q: query,
-        similar_to: similar_to
-      }) do
-    avatar_listing_search(cursor, query, filter, similar_to)
   end
 
   def search(%Ret.MediaSearchQuery{source: "avatars", cursor: cursor, filter: filter, user: account_id, q: query}) do
