@@ -23,8 +23,7 @@ defmodule Ret.JanusLoadStatus do
   defp get_dialog_pods() do
     try do
       host_names = [
-        "svc-dialog.metaverse",
-        "dialog"
+        module_config(:dialog_host),
       ]
 
       for host_name <- host_names do
