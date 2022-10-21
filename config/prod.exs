@@ -122,8 +122,6 @@ config :ret, Ret.Scheduler,
     {{:cron, "7 10 * * *"}, {Ret.CachedFile, :vacuum, []}}
   ]
 
-config :ret, RetWeb.Plugs.HeaderAuthorization, header_name: "x-ret-admin-access-key"
-
 config :ret, Ret.Guardian, issuer: "ret", ttl: {12, :weeks}, allowed_drift: 60 * 1000
 
 config :tzdata, :autoupdate, :disabled
